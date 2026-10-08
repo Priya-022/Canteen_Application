@@ -37,3 +37,13 @@ create policy "Admins can delete canteen menu items"
 on public.canteen_menu for delete
 to authenticated
 using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+create table if not exists public.admin_login_users (
+  username text primary key
+    check (username ~ '^[a-z0-9][a-z0-9._-]{2,31}$'),
+  user_id uuid not null unique references auth.users (id) on delete cascade
+);
+
+alter table public.admin_login_users enable row level security;
+revoke all on table public.admin_login_users from public, anon, authenticated;
+grant select on table public.admin_login_users to service_role;

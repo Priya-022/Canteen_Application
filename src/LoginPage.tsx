@@ -4,17 +4,17 @@ type LoginPageProps = {
   configured: boolean
   error: string
   busy: boolean
-  onGuestLogin: () => void
-  onAdminLogin: (email: string, password: string) => void
+  onBack: () => void
+  onAdminLogin: (userId: string, password: string) => void
 }
 
-function LoginPage({ configured, error, busy, onGuestLogin, onAdminLogin }: LoginPageProps) {
-  const [email, setEmail] = useState('')
+function LoginPage({ configured, error, busy, onBack, onAdminLogin }: LoginPageProps) {
+  const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
 
   function submitAdmin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    onAdminLogin(email.trim(), password)
+    onAdminLogin(userId.trim(), password)
   }
 
   return (
@@ -26,37 +26,26 @@ function LoginPage({ configured, error, busy, onGuestLogin, onAdminLogin }: Logi
 
       <section className="login-content">
         <div className="login-heading">
-          <span className="login-eyebrow">A BETTER LUNCH BREAK STARTS HERE</span>
-          <h1>Welcome to your<br />campus canteen<span>.</span></h1>
-          <p>Check the crowd, find a quieter time, and see what’s on the menu.</p>
+          <span className="login-eyebrow">CANTEEN MANAGEMENT</span>
+          <h1>Admin sign in<span>.</span></h1>
+          <p>Sign in with your assigned admin account to manage the canteen menu.</p>
         </div>
 
         <div className="login-options">
-          <article className="login-card guest-login-card">
-            <span className="login-card-icon guest-icon" aria-hidden="true">♧</span>
-            <span className="login-card-label">FOR STUDENTS & VISITORS</span>
-            <h2>Continue as a guest</h2>
-            <p>No account needed. Check crowd predictions and see today’s menu.</p>
-            <button className="login-primary-button" type="button" disabled={!configured || busy} onClick={onGuestLogin}>
-              {busy ? 'Connecting…' : 'Continue as guest'} <span aria-hidden="true">→</span>
-            </button>
-            <span className="login-note">Quick, private, and no sign-up required.</span>
-          </article>
-
           <article className="login-card admin-login-card">
             <span className="login-card-icon admin-icon" aria-hidden="true">⌘</span>
             <span className="login-card-label">CANTEEN MANAGEMENT</span>
             <h2>Admin sign in</h2>
             <p>Manage menu items, prices, and what’s available today.</p>
             <form className="admin-login-form" onSubmit={submitAdmin}>
-              <label htmlFor="admin-email">Email address</label>
+              <label htmlFor="admin-user-id">User ID</label>
               <input
-                id="admin-email"
-                type="email"
+                id="admin-user-id"
+                type="text"
                 autoComplete="username"
-                placeholder="admin@college.edu"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                placeholder="admin"
+                value={userId}
+                onChange={(event) => setUserId(event.target.value)}
                 required
               />
               <label htmlFor="admin-password">Password</label>
@@ -85,7 +74,7 @@ function LoginPage({ configured, error, busy, onGuestLogin, onAdminLogin }: Logi
           </div>
         )}
         {error && <div className="login-message error-message" role="alert">{error}</div>}
-        <p className="login-privacy">Your sign-in is handled securely by Supabase. We never show or store admin passwords in the app.</p>
+        <button className="top-signout" type="button" onClick={onBack}>Back to guest view</button>
       </section>
 
       <footer className="login-footer"><span>Made for better campus breaks.</span><span>© CanteenPulse</span></footer>

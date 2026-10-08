@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import type { Session } from '@supabase/supabase-js'
 import './App.css'
 import AdminPanel from './AdminPanel'
@@ -9,6 +10,10 @@ import { supabase } from './supabase'
 type CrowdLevel = 'Quiet' | 'Moderate' | 'Busy'
 type FeedbackLevel = 'quiet' | 'moderate' | 'busy'
 type FeedbackStore = Record<string, Record<FeedbackLevel, number>>
+type AdminLoginResponse = {
+  access_token: string
+  refresh_token: string
+}
 
 const timeSlots = [
   '11:00 AM',
@@ -59,6 +64,7 @@ function getCrowd(score: number): CrowdLevel {
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [authReady, setAuthReady] = useState(supabase === null)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState('')
@@ -71,8 +77,7 @@ function App() {
   const [menuLoadedFor, setMenuLoadedFor] = useState<string | null>(null)
   const [menuLoadError, setMenuLoadError] = useState('')
   const isAdmin = session?.user.is_anonymous !== true && session?.user.app_metadata.role === 'admin'
-  const isGuest = session?.user.is_anonymous === true
-  const viewerMode = isAdmin ? 'admin' : isGuest ? 'guest' : null
+  const viewerMode = isAdmin ? 'admin' : showAdminLogin ? null : 'guest'
 
   useEffect(() => {
     if (!supabase) return
@@ -135,41 +140,69 @@ function App() {
     }
   }, [viewerMode])
 
-  async function signInAsGuest() {
-    if (!supabase) return
-    setAuthBusy(true)
+  function openAdminLogin() {
     setAuthError('')
-    try {
-      const { error } = await supabase.auth.signInAnonymously()
-      if (error) {
-        console.error('Guest sign-in failed.', error)
-        setAuthError(error.message)
-      }
-    } catch (error: unknown) {
-      console.error('Guest sign-in failed.', error)
-      setAuthError(error instanceof Error ? error.message : 'Guest sign-in failed. Please try again.')
-    } finally {
-      setAuthBusy(false)
-    }
+    setShowAdminLogin(true)
   }
 
-  async function signInAsAdmin(email: string, password: string) {
+  function returnToGuest() {
+    setAuthError('')
+    setShowAdminLogin(false)
+  }
+
+  async function signInAsAdmin(userId: string, password: string) {
     if (!supabase) return
     setAuthBusy(true)
     setAuthError('')
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.functions.invoke<AdminLoginResponse>(
+        'admin-username-login',
+        { body: { username: userId, password } },
+      )
       if (error) {
         console.error('Admin sign-in failed.', error)
-        setAuthError(error.message)
+        let message = error.message
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const payload: unknown = await error.context.json()
+            if (
+              typeof payload === 'object'
+              && payload !== null
+              && 'error' in payload
+              && typeof payload.error === 'string'
+            ) {
+              message = payload.error
+            }
+          } catch (parseError: unknown) {
+            console.error('Could not read the admin sign-in response.', parseError)
+          }
+        }
+        setAuthError(message)
         return
       }
 
-      if (data.user.app_metadata.role !== 'admin') {
+      if (!data?.access_token || !data.refresh_token) {
+        setAuthError('Admin sign-in returned an invalid response. Please try again.')
+        return
+      }
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      })
+      if (sessionError) {
+        console.error('Could not establish the admin session.', sessionError)
+        setAuthError(sessionError.message)
+        return
+      }
+
+      if (!sessionData.user || sessionData.user.app_metadata.role !== 'admin') {
         const { error: signOutError } = await supabase.auth.signOut()
         if (signOutError) console.error('Could not end the unauthorized session.', signOutError)
         setAuthError('This account does not have canteen admin access. Please use an assigned admin account.')
+        return
       }
+      setShowAdminLogin(false)
     } catch (error: unknown) {
       console.error('Admin sign-in failed.', error)
       setAuthError(error instanceof Error ? error.message : 'Admin sign-in failed. Please try again.')
@@ -179,7 +212,7 @@ function App() {
   }
 
   async function signOut() {
-    if (!supabase) return
+    if (!supabase || !session) return
     try {
       const { error } = await supabase.auth.signOut()
       if (error) {
@@ -249,13 +282,13 @@ function App() {
     return <main className="auth-loading" role="status">Connecting to CanteenPulse…</main>
   }
 
-  if (!viewerMode) {
+  if (showAdminLogin && !isAdmin) {
     return (
       <LoginPage
         configured={supabase !== null}
         error={authError || (session ? 'This account does not have canteen admin access. Please sign in with an assigned admin account.' : '')}
         busy={authBusy}
-        onGuestLogin={() => void signInAsGuest()}
+        onBack={returnToGuest}
         onAdminLogin={(email, password) => void signInAsAdmin(email, password)}
       />
     )
@@ -317,7 +350,7 @@ function App() {
             <span className="live-indicator"><i /> Canteen overview</span>
             <span className="topbar-divider" />
             <span className="date-chip"><span aria-hidden="true">▦</span> {dateLabel}</span>
-            {!isAdmin && <button className="top-signout" type="button" onClick={() => void signOut()}>Sign out</button>}
+            {!isAdmin && <button className="top-signout" type="button" onClick={openAdminLogin}>Admin sign in</button>}
             <div className="top-avatar" aria-label={isAdmin ? 'Canteen admin' : 'Campus guest'}>{isAdmin ? 'AD' : 'GU'}</div>
           </div>
         </header>

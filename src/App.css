@@ -1178,7 +1178,8 @@ h1 > span {
 
 .login-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 420px);
+  justify-content: center;
   gap: 15px;
 }
 
@@ -1814,7 +1815,7 @@ h1 > span {
   }
 
   .login-options {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .login-card {
